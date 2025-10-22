@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Galeria VR - A-Frame (vídeo automático)</title>
+    <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      a-scene { height: 100%; }
+      /* overlay simples para botão de som */
+      .unmute-btn {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 20px;
+        background: rgba(0,0,0,0.7);
+        color: #fff;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-family: sans-serif;
+        display: none;
+        z-index: 9999;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- botão visível para desmutar (aparece quando o vídeo começa) -->
+ <!--   <div id="unmuteBtn" class="unmute-btn">Ativar Som</div>-->
+
+    <a-scene>
+      <!-- Assets -->
+      <a-assets>
+        <img id="library" src="fundo2.jpg" />
+        <img id="thumb1" src="packages/imagem1.webp" />
+        <img id="thumb2" src="packages/imagem2.jpg" />
+        <img id="thumb3" src="packages/imagem3.jpg" />
+        <img id="thumb-video" src="packages/thumb-video.jpg" /> <!-- miniatura do vídeo -->
+        <img id="pano1" src="packages/imagem1.webp" />
+        <img id="pano2" src="packages/imagem2.jpg" />
+        <img id="voltar" src="voltar.png" />
+
+        <audio id="audio-pano1" src="audio.mp3" preload="auto"></audio>
+        <audio id="audio-pano2" src="audio.mp3" preload="auto"></audio>
+        <audio id="audio-pano3" src="audio.mp3" preload="auto"></audio>
+
+        <!-- ELEMENTO DE VÍDEO REAL (ATENÇÃO AO PATH: ajuste se necessário) -->
+        <video id="video1"
+               src="packages/video1.webm"
+               preload="auto"
+               webkit-playsinline
+               playsinline
+               muted
+               loop
+               crossorigin="anonymous"></video>
+      </a-assets>
+
+      <!-- Botão Voltar (inicialmente oculto) -->
+      <a-entity id="back-button" visible="false" position="0 1.2 -1.5">
+        <a-plane id="back-plate" src="#voltar" width="0.8" height="0.3" material="shader: flat"></a-plane>
+      </a-entity>
+
+      <!-- Galeria -->
+      <a-entity id="gallery" position="0 1.6 -3">
+        <a-plane class="thumb" id="thumb-1" src="#thumb1" height="1" width="1.6" position="-2 0 0" material="shader: flat"></a-plane>
+        <a-entity id="tooltip-1" visible="false" position="-2 0.8 0">
+          <a-plane width="1.6" height="0.4" color="#000" opacity="0.8"></a-plane>
+          <a-text value="Abrir panorama 1" color="#fff" align="center" width="1.4" position="0 0 0.01"></a-text>
+        </a-entity>
+
+        <a-plane class="thumb" id="thumb-2" src="#thumb2" height="1" width="1.6" position="0 0 0" material="shader: flat"></a-plane>
+        <a-entity id="tooltip-2" visible="false" position="0 0.8 0">
+          <a-plane width="1.6" height="0.4" color="#000" opacity="0.8"></a-plane>
+          <a-text value="Abrir panorama 2" color="#fff" align="center" width="1.4" position="0 0 0.01"></a-text>
+        </a-entity>
+
+        <a-plane class="thumb" id="thumb-3" src="#thumb3" height="1" width="1.6" position="2 0 0" material="shader: flat"></a-plane>
+        <a-entity id="tooltip-3" visible="false" position="2 0.8 0">
+          <a-plane width="1.6" height="0.4" color="#000" opacity="0.8"></a-plane>
+          <a-text value="Abrir panorama 3" color="#fff" align="center" width="1.4" position="0 0 0.01"></a-text>
+        </a-entity>
+
+        <!-- Miniatura do vídeo -->
+        <a-plane class="thumb" id="thumb-video" src="#thumb-video" height="1" width="1.6" position="0 1.5 0" material="shader: flat"></a-plane>
+        <a-entity id="tooltip-video" visible="false" position="0 2.3 0">
+          <a-plane width="1.6" height="0.4" color="#000" opacity="0.8"></a-plane>
+          <a-text value="Assistir vídeo" color="#fff" align="center" width="1.4" position="0 0 0.01"></a-text>
+        </a-entity>
+      </a-entity>
+
+      <!-- Céu -->
+      <a-sky id="main-sky" src="#library"></a-sky>
+
+      <!-- Tela de vídeo -->
+      <a-video id="video-screen" src="#video1" visible="false" width="16" height="9" position="0 1.6 -6"></a-video>
+
+      <!-- Esfera de vídeo -->
+      <a-videosphere id="video-sphere" src="#video1" visible="false"></a-videosphere>
+
+      <!-- Câmera e cursor (gaze) -->
+      <a-entity id="cameraRig" position="0 1.6 0">
+        <a-entity camera look-controls>
+          <a-entity id="cursor" cursor="fuse: true; fuseTimeout: 3000" position="0 0 -1"
+                    geometry="primitive: ring; radiusInner: 0.02; radiusOuter: 0.03"
+                    material="color: #333; shader: flat">
+            <a-ring id="gaze-progress" radius-inner="0.03" radius-outer="0.031" material="color: #0f0; shader: flat; opacity: 0.9" scale="0 0 0"></a-ring>
+          </a-entity>
+        </a-entity>
+      </a-entity>
+
+    </a-scene>
+
+    <script>
+      (function(){
+        // Utilitários
+        function log(){ console.log.apply(console, arguments); }
+        function err(){ console.error.apply(console, arguments); }
+
+        // Áudio
+        function pauseAllAudio(){
+          document.querySelectorAll('audio').forEach(a => { try{ a.pause(); a.currentTime = 0; }catch(e){} });
+        }
+        function playAudioById(id){
+          if(!id) return;
+          pauseAllAudio();
+          var a = document.querySelector(id);
+          if(!a) return;
+          a.loop = true;
+          var p = a.play();
+          if(p !== undefined){
+            p.catch(function(e){
+              log('audio play prevented, waiting user interaction', e);
+              function unlock(){ a.play(); window.removeEventListener('click', unlock); window.removeEventListener('touchstart', unlock); }
+              window.addEventListener('click', unlock, {once:true});
+              window.addEventListener('touchstart', unlock, {once:true});
+            });
+          }
+        }
+
+        // Vídeo
+        var videoEl = document.querySelector('#video1');
+        var aVideoEntity = document.querySelector('#video-screen');
+        var unmuteBtn = document.getElementById('unmuteBtn');
+
+        // Debug events no elemento <video>
+        if(videoEl){
+          videoEl.addEventListener('canplay', function(){ log('video canplay'); });
+          videoEl.addEventListener('loadeddata', function(){ log('video loadeddata'); });
+          videoEl.addEventListener('error', function(e){ err('video element error', e); });
+          videoEl.addEventListener('play', function(){ log('video play event'); });
+          videoEl.addEventListener('pause', function(){ log('video pause event'); });
+        }
+
+        function playVideo(){
+          if(!videoEl){
+            err('video element (#video1) não encontrado');
+            return;
+          }
+          // garantir muted antes do play para evitar bloqueio por autoplay
+          videoEl.muted = true;
+          var p = videoEl.play();
+          if(p !== undefined){
+            p.then(function(){
+              log('video started (promise resolved)');
+              // exibir botão de desmutar para usuário, se quiser som
+              if(unmuteBtn){ unmuteBtn.style.display = 'block'; }
+            }).catch(function(e){
+              err('play() rejeitado:', e);
+              // tentativa de desbloqueio via evento de interação
+              function unlock(){
+                videoEl.play().catch(function(e2){ err('play após unlock falhou', e2); });
+                window.removeEventListener('click', unlock);
+                window.removeEventListener('touchstart', unlock);
+              }
+              window.addEventListener('click', unlock, {once:true});
+              window.addEventListener('touchstart', unlock, {once:true});
+            });
+          }
+        }
+
+        function pauseVideo(){
+          if(videoEl){
+            try{ videoEl.pause(); videoEl.currentTime = 0; }catch(e){ err(e); }
+            if(unmuteBtn) unmuteBtn.style.display = 'none';
+          }
+        }
+
+        // Botão de desmutar (aparece quando o vídeo começa)
+        if(unmuteBtn){
+          unmuteBtn.addEventListener('click', function(){
+            if(videoEl){
+              try{
+                videoEl.muted = false;
+                videoEl.volume = 1;
+                unmuteBtn.style.display = 'none';
+                log('usuário ativou som do vídeo');
+              }catch(e){ err('erro ao desmutar', e); }
+            }
+          });
+        }
+
+        // Gaze logic
+        (function(){
+          var fuseTime = 3000; // 3s
+          var mapping = {
+            'thumb-1': { pano: '#pano1', audio: '#audio-pano1' },
+            'thumb-2': { pano: '#pano2', audio: '#audio-pano2' },
+            'thumb-3': { pano: '#pano1', audio: '#audio-pano1' },
+            'thumb-video': { video: '#video1' }
+          };
+
+          var progress = document.getElementById('gaze-progress');
+          var mainSky = document.getElementById('main-sky');
+          var videoScreen = document.getElementById('video-screen');
+
+          var fuseTimer = null;
+          var startTime = null;
+          var currentTarget = null;
+
+          function showTooltipFor(id){
+            if(!id) return;
+            // pega o sufixo depois do primeiro '-'
+            var parts = id.split('-');
+            var suffix = parts.slice(1).join('-'); // para 'thumb-video' retorna 'video'
+            var tip = document.getElementById('tooltip-' + suffix);
+            if(tip) tip.setAttribute('visible','true');
+          }
+          function hideAllTooltips(){
+            document.querySelectorAll('[id^="tooltip-"]').forEach(function(t){ t.setAttribute('visible','false'); });
+          }
+
+          function startFuse(id){
+            clearFuse();
+            currentTarget = id;
+            startTime = Date.now();
+            showTooltipFor(id);
+            progress.setAttribute('scale','0 0 0');
+            fuseTimer = requestAnimationFrame(function tick(){
+              var elapsed = Date.now() - startTime;
+              var t = Math.min(1, elapsed / fuseTime);
+              progress.setAttribute('scale', t + ' ' + t + ' ' + t);
+              if(elapsed >= fuseTime){
+                completeFuse(currentTarget);
+                return;
+              }
+              fuseTimer = requestAnimationFrame(tick);
+            });
+          }
+
+          function clearFuse(){
+            if(fuseTimer){ cancelAnimationFrame(fuseTimer); fuseTimer = null; }
+            startTime = null;
+            currentTarget = null;
+            if(progress) progress.setAttribute('scale','0 0 0');
+            hideAllTooltips();
+          }
+
+          function completeFuse(id) {
+            clearFuse();
+            log('completeFuse for', id);
+            if (id && mapping[id]) {
+              var item = mapping[id];
+
+              if (item.pano) {
+                // abrir panorama
+                mainSky.setAttribute('src', item.pano);
+                document.getElementById('gallery').setAttribute('visible', 'false');
+                document.getElementById('back-button').setAttribute('visible', 'true');
+                playAudioById(item.audio);
+                if (videoScreen) videoScreen.setAttribute('visible', 'false');
+                pauseVideo();
+              } else if (item.video) {
+                // exibir vídeo 360 no <a-videosphere>
+                var videoSphere = document.getElementById('video-sphere');
+                if (videoSphere) {
+                  videoSphere.setAttribute('visible', 'true');
+                  videoSphere.setAttribute('src', item.video); // Define o vídeo no <a-videosphere>
+                  document.getElementById('gallery').setAttribute('visible', 'false');
+                  document.getElementById('back-button').setAttribute('visible', 'true');
+                  playVideo(); // Reproduz o vídeo
+                }
+              }
+            } else if (id === 'back-button') {
+              // voltar à galeria
+              mainSky.setAttribute('src', '#library');
+              document.getElementById('gallery').setAttribute('visible', 'true');
+              document.getElementById('back-button').setAttribute('visible', 'false');
+              var videoSphere = document.getElementById('video-sphere');
+              if (videoSphere) videoSphere.setAttribute('visible', 'false');
+              pauseAllAudio();
+              pauseVideo();
+            } else {
+              log('completeFuse: alvo não mapeado', id);
+            }
+          }
+
+          // listeners nos thumbs
+          document.querySelectorAll('.thumb').forEach(function(thumb){
+            thumb.addEventListener('mouseenter', function(){ startFuse(thumb.id); });
+            thumb.addEventListener('mouseleave', function(){ clearFuse(); });
+            // também aceitar clique como fallback
+            thumb.addEventListener('click', function(){ completeFuse(thumb.id); });
+          });
+
+          // back plate
+          var backPlate = document.getElementById('back-plate');
+          if(backPlate){
+            backPlate.addEventListener('mouseenter', function(){ startFuse('back-button'); });
+            backPlate.addEventListener('mouseleave', clearFuse);
+            backPlate.addEventListener('click', function(){ completeFuse('back-button'); });
+          }
+
+        })();
+
+      })();
+    </script>
+  </body>
+</html>
+``` 
